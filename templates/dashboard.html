@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <style>
+        .stats { background: #f0f8ff; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .security-feature { background: #fff8e1; padding: 10px; margin: 5px 0; border-left: 3px solid #ff9800; }
+    </style>
+</head>
+<body>
+    <h2>🏠 Welcome, {{ username }}!</h2>
+    
+    {% if stats %}
+    <div class="stats">
+        <h3>📊 Security Statistics</h3>
+        <p><strong>Total Requests:</strong> {{ stats.total_requests }}</p>
+        <p><strong>Blocked IPs:</strong> {{ stats.blocked_ips }}</p>
+        <p><strong>Active Attacks:</strong> {{ stats.active_attacks }}</p>
+        <p><strong>Security Alerts:</strong> {{ stats.security_alerts }}</p>
+    </div>
+    {% endif %}
+    
+    <div class="security-feature">
+        <h3>🔒 Security Features Active</h3>
+        <ul>
+            <li>✅ DoS/DDoS Detection & Mitigation</li>
+            <li>✅ Rate Limiting & IP Blocking</li>
+            <li>✅ Suspicious Pattern Detection</li>
+            <li>✅ Failed Login Attempt Monitoring</li>
+            <li>✅ Real-time Security Logging</li>
+        </ul>
+    </div>
+    
+    {% if role == 'admin' or role == 'security_admin' %}
+        <h3>🛡️ Admin Functions</h3>
+        <a href="{{ url_for('security_dashboard') }}">🔒 Security Dashboard</a><br>
+        <a href="{{ url_for('view_logs') }}">📋 View System Logs</a><br><br>
+        
+        <form action="{{ url_for('send_notification') }}" method="post">
+            <h4>📧 Send Security Alert</h4>
+            Recipient Email: <input name="recipient" type="email" required><br>
+            Message: <textarea name="message" required></textarea><br>
+            <button type="submit">Send Alert</button>
+        </form>
+    {% else %}
+        <h3>🔧 User Functions</h3>
+        <form action="{{ url_for('request_service') }}" method="post">
+            <button type="submit">Request Service</button>
+        </form>
+    {% endif %}
+    
+    <br>
+    <a href="{{ url_for('logout') }}">🚪 Logout</a>
+</body>
+</html>

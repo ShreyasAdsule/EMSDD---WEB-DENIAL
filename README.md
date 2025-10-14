@@ -13,3 +13,22 @@ Team members:
 	Shreyas Vinod Adsule - sadsule@buffalo.edu		
 	Dhanalakshimi Partipan - dparthip@buffalo.edu		
 	Derrick Dennis Dabreo - ddabreo@buffalo.edu
+
+
+
+## How to run this Project?
+
+### Clone the repository
+
+- Clone the reporitory first.
+- Then open it in an IDE
+
+### Installing the Server
+
+- First, initialize a python virtual environment: `python -m venv venv`
+- Then, install the requirements using the `requirements.txt` file: `pip install -r requirements.txt`
+
+### Running the server
+
+- Run the command: `python app.py` in the project directory.
+- You will get the output of the server running on the specific hosts and URL and the usernames snd passwords.
