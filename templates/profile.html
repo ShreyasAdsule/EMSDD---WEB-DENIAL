@@ -1,0 +1,12 @@
+<!doctype html>
+<title>Profile</title>
+<h2>Edit Profile</h2>
+<form method="post">
+    About Me:<br>
+    <textarea name="about_me">{{ about_me }}</textarea><br>
+    <input type="submit" value="Save">
+</form>
+<a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+{% with messages = get_flashed_messages() %}
+  {% if messages %}<ul>{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}
+{% endwith %}

@@ -1,34 +1,44 @@
-# EMSDD---WEB-DENIAL
-We are team of 5 members, we all are pursuing Master's in Cybersecurity.
-Our project is based on WEB DENIAL, and it helps to detects and prevents DDOS Attacks that slows down a website or web server making them unresponsive.
+# Secure Flask Web Application
 
-Our team details are as follows:
-Team name	EMSDD – Web Deniel			
-Project topic - Web and DDoS prevention Application			
-Project repository - https://github.com/ShreyasAdsule/EMSDD---WEB-DENIAL.git			
+A demo security-focused web application using Flask. Includes authentication, rate limiting, password management, profile editing, secure messaging, logging, and user activity audit trail.
 
-Team members:
-	Eshwar Adharsh Reddy Penamareddy -	eshwarad@buffalo.edu 
-	Mohith Naidu Ganisetti - mohithna@buffalo.edu		
-	Shreyas Vinod Adsule - sadsule@buffalo.edu		
-	Dhanalakshimi Partipan - dparthip@buffalo.edu		
-	Derrick Dennis Dabreo - ddabreo@buffalo.edu
+## Features
 
+- Secure login with hashed password and CAPTCHA
+- Account lockout on repeated failed logins
+- Change password (dashboard link)
+- Profile editing ("About Me" field)
+- Contact Admin messaging from dashboard
+- Rate limiting for login and service requests
+- Role-based access (user/admin)
+- System logs and message logs for admin
+- User activity timeline (audit trail)
+- Admin view of any user's activity timeline
+- In-memory storage for demo purposes
 
+## Quick Start
 
-## How to run this Project?
+1. Install required packages:
+    ```
+    pip install flask flask-limiter werkzeug
+    ```
+2. Place all `.html` files in the `templates/` directory.
+3. Run:
+    ```
+    python app.py
+    ```
+4. Access at [http://localhost:5000](http://localhost:5000)
 
-### Clone the repository
+## Default Users
 
-- Clone the reporitory first.
-- Then open it in an IDE
+- user1 / pass1 (regular user)
+- admin / adminpass (admin role)
 
-### Installing the Server
+## Notes
 
-- First, initialize a python virtual environment: `python -m venv venv`
-- Then, install the requirements using the `requirements.txt` file: `pip install -r requirements.txt`
+- For real-world use: Add persistent database, use environment variables for secret keys, secure sessions, implement 2FA/SSL.
+- All audit and log trails are reset when app restarts.
 
-### Running the server
+## License
 
-- Run the command: `python app.py` in the project directory.
-- You will get the output of the server running on the specific hosts and URL and the usernames snd passwords.
+MIT

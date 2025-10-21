@@ -1,174 +1,52 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.security import generate_password_hash, check_password_hash
-import random
-import smtplib
-import time
-import threading
+import random, time
 from collections import defaultdict, deque
-import json
-from datetime import datetime, timedelta
-import hashlib
-import socket
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_change_in_production'
+app.secret_key = 'your_secret_key'
 
-# Enhanced Rate Limiter with Redis-like functionality
-limiter = Limiter(
-    get_remote_address,
-    app=app,
-    default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://"
-)
+limiter = Limiter(get_remote_address, app=app, default_limits=["10 per minute"])
 
-# Security Configuration
-SECURITY_CONFIG = {
-    'max_failed_attempts': 3,
-    'lockout_duration': 300,  # 5 minutes
-    'dos_threshold': 100,     # requests per minute
-    'ddos_threshold': 1000,   # total requests per minute
-    'suspicious_patterns': ['admin', 'login', 'sql', 'script', 'union']
-}
-
-# Enhanced user database with hashed passwords
 users = {
     "user1": generate_password_hash("pass1"),
-    "admin": generate_password_hash("adminpass"),
-    "security_admin": generate_password_hash("secpass123")
+    "admin": generate_password_hash("adminpass")
 }
-
 user_roles = {
-    "user1": "user", 
-    "admin": "admin", 
-    "security_admin": "security_admin"
+    "user1": "user",
+    "admin": "admin"
 }
 
-# Security monitoring data structures
+profiles = defaultdict(str)  # For profile "about me" info
+messages_to_admin = deque(maxlen=100)  # For contact messages
+
 failed_attempts = defaultdict(int)
 locked_accounts = {}
 request_logs = deque(maxlen=10000)
-attack_logs = []
-ip_requests = defaultdict(lambda: deque(maxlen=1000))
 blocked_ips = set()
-security_alerts = []
-
-# DoS/DDoS Detection System
-class SecurityMonitor:
-    def __init__(self):
-        self.reset_counters()
-        
-    def reset_counters(self):
-        self.current_minute = int(time.time() // 60)
-        self.requests_this_minute = defaultdict(int)
-        self.total_requests_this_minute = 0
-        
-    def log_request(self, ip, endpoint, user_agent='', method='GET'):
-        current_time = time.time()
-        current_minute = int(current_time // 60)
-        
-        # Reset counters if new minute
-        if current_minute > self.current_minute:
-            self.reset_counters()
-            
-        # Log the request
-        request_data = {
-            'timestamp': current_time,
-            'ip': ip,
-            'endpoint': endpoint,
-            'user_agent': user_agent,
-            'method': method
-        }
-        request_logs.append(request_data)
-        
-        # Update counters
-        self.requests_this_minute[ip] += 1
-        self.total_requests_this_minute += 1
-        ip_requests[ip].append(current_time)
-        
-        # Check for DoS (single IP)
-        if self.requests_this_minute[ip] > SECURITY_CONFIG['dos_threshold']:
-            self.handle_dos_attack(ip, self.requests_this_minute[ip])
-            
-        # Check for DDoS (total traffic)
-        if self.total_requests_this_minute > SECURITY_CONFIG['ddos_threshold']:
-            self.handle_ddos_attack(self.total_requests_this_minute)
-            
-        # Check for suspicious patterns
-        self.check_suspicious_patterns(ip, endpoint, user_agent)
-        
-    def handle_dos_attack(self, ip, request_count):
-        blocked_ips.add(ip)
-        attack_info = {
-            'type': 'DoS',
-            'source_ip': ip,
-            'request_count': request_count,
-            'timestamp': datetime.now().isoformat(),
-            'mitigation': f'IP {ip} blocked'
-        }
-        attack_logs.append(attack_info)
-        security_alerts.append(f"DoS attack detected from {ip} - {request_count} requests/minute")
-        
-    def handle_ddos_attack(self, total_requests):
-        attack_info = {
-            'type': 'DDoS',
-            'total_requests': total_requests,
-            'timestamp': datetime.now().isoformat(),
-            'mitigation': 'Enhanced rate limiting activated'
-        }
-        attack_logs.append(attack_info)
-        security_alerts.append(f"DDoS attack detected - {total_requests} total requests/minute")
-        
-    def check_suspicious_patterns(self, ip, endpoint, user_agent):
-        suspicious_score = 0
-        
-        # Check for suspicious keywords in endpoint
-        for pattern in SECURITY_CONFIG['suspicious_patterns']:
-            if pattern.lower() in endpoint.lower():
-                suspicious_score += 1
-                
-        # Check for suspicious user agents
-        if 'bot' in user_agent.lower() or len(user_agent) < 10:
-            suspicious_score += 1
-            
-        if suspicious_score > 1:
-            security_alerts.append(f"Suspicious activity from {ip}: {endpoint}")
-
-security_monitor = SecurityMonitor()
+user_activity = defaultdict(lambda: deque(maxlen=200))  # Audit trail
 
 def generate_captcha():
     a, b = random.randint(1, 9), random.randint(1, 9)
     session['captcha_answer'] = str(a + b)
-    return f"{a} + {b}"
-
-def is_ip_blocked(ip):
-    return ip in blocked_ips
+    session['captcha_q'] = f"{a} + {b}"
+    return session['captcha_q']
 
 def check_account_locked(username):
-    if username in locked_accounts:
-        if time.time() < locked_accounts[username]:
-            return True
-        else:
-            del locked_accounts[username]
-            failed_attempts[username] = 0
+    if username in locked_accounts and time.time() < locked_accounts[username]:
+        return True
+    elif username in locked_accounts:
+        del locked_accounts[username]
+        failed_attempts[username] = 0
     return False
 
 @app.before_request
 def before_request():
     client_ip = get_remote_address()
-    
-    # Block known malicious IPs
-    if is_ip_blocked(client_ip):
-        return "Access denied - IP blocked due to suspicious activity", 403
-        
-    # Log all requests for security monitoring
-    security_monitor.log_request(
-        ip=client_ip,
-        endpoint=request.endpoint or request.path,
-        user_agent=request.headers.get('User-Agent', ''),
-        method=request.method
-    )
+    if client_ip in blocked_ips:
+        return "Access denied - IP blocked.", 403
 
 @app.route('/', methods=['GET', 'POST'])
 @limiter.limit("10 per minute")
@@ -177,234 +55,135 @@ def login():
         username = request.form['username']
         password = request.form['password']
         captcha_response = request.form['captcha']
+        captcha_answer = session.get('captcha_answer')
+        captcha_q = session.get('captcha_q', '???')
 
-        # Check if account is locked
         if check_account_locked(username):
             flash(f"Account locked. Try again later.")
-            # Show the same captcha again—do not call generate_captcha here!
-            captcha_q = session.get('captcha_q', '???')
             return render_template('login.html', captcha_q=captcha_q)
-
-        # Validate credentials and captcha
-        correct_captcha = session.get('captcha_answer')
         if username in users and check_password_hash(users[username], password):
-            if captcha_response == correct_captcha:
+            if captcha_response == captcha_answer:
                 session['username'] = username
                 failed_attempts[username] = 0
+                user_activity[username].appendleft({'event': 'login', 'time': time.strftime('%Y-%m-%d %H:%M:%S')})
+                print(user_activity)
                 return redirect(url_for('dashboard'))
             else:
                 flash("CAPTCHA verification failed.")
         else:
             failed_attempts[username] += 1
-            if failed_attempts[username] >= SECURITY_CONFIG['max_failed_attempts']:
-                locked_accounts[username] = time.time() + SECURITY_CONFIG['lockout_duration']
-                security_alerts.append(f"Account {username} locked due to repeated failed attempts")
+            if failed_attempts[username] >= 3:
+                locked_accounts[username] = time.time() + 60
             flash("Incorrect username or password.")
-
-        # Show the same captcha again—do not call generate_captcha here!
-        captcha_q = session.get('captcha_q', '???')
         return render_template('login.html', captcha_q=captcha_q)
-
-    # Only generate new CAPTCHA on GET
     captcha_q = generate_captcha()
-    session['captcha_q'] = captcha_q
     return render_template('login.html', captcha_q=captcha_q)
 
 @app.route('/dashboard')
 def dashboard():
     if 'username' not in session:
         return redirect(url_for('login'))
-    
-    user_role = user_roles.get(session['username'], 'user')
-    stats = None
-    
-    if user_role in ['admin', 'security_admin']:
-        stats = {
-            'total_requests': len(request_logs),
-            'blocked_ips': len(blocked_ips),
-            'active_attacks': len([a for a in attack_logs if 
-                                datetime.fromisoformat(a['timestamp']) > 
-                                datetime.now() - timedelta(hours=1)]),
-            'security_alerts': len(security_alerts)
-        }
-    
-    return render_template('dashboard.html', 
-                         username=session['username'], 
-                         role=user_role,
-                         stats=stats)
+    username = session['username']
+    role = user_roles.get(username, 'user')
+    about_me = profiles.get(username, "")
+    return render_template('dashboard.html', username=username, role=role, about_me=about_me)
 
 @app.route('/request_service', methods=['POST'])
-@limiter.limit("5 per minute")
+@limiter.limit("3 per minute")
 def request_service():
     if 'username' not in session:
         return "User not logged in.", 401
-    
-    client_ip = get_remote_address()
-    
-    # Additional service-specific rate limiting
-    service_requests = [r for r in request_logs if 
-                       r.get('event') == 'service_request' and 
-                       r.get('ip') == client_ip and 
-                       time.time() - r.get('timestamp', 0) < 60]
-    
-    if len(service_requests) > 3:
-        security_alerts.append(f"Rate limit exceeded for service requests from {client_ip}")
-        return "Rate limit exceeded. Please wait before making another request.", 429
-    
-    request_logs.append({
-        'timestamp': time.time(),
-        'event': 'service_request',
-        'username': session['username'],
-        'ip': client_ip
-    })
-    
+    request_logs.append({'timestamp': time.time(), 'event': 'service_request', 'username': session['username']})
+    user_activity[session['username']].appendleft({'event': 'service_request', 'time': time.strftime('%Y-%m-%d %H:%M:%S')})
     return "Service request processed and logged!"
-
-@app.route('/security_dashboard')
-def security_dashboard():
-    if 'username' not in session or user_roles.get(session['username']) not in ['admin', 'security_admin']:
-        return "Not authorized", 403
-    
-    recent_attacks = [a for a in attack_logs if 
-                     datetime.fromisoformat(a['timestamp']) > 
-                     datetime.now() - timedelta(hours=24)]
-    
-    return render_template('security_dashboard.html', 
-                         attacks=recent_attacks,
-                         blocked_ips=list(blocked_ips),
-                         alerts=security_alerts[-50:])
 
 @app.route('/view_logs')
 def view_logs():
-    if 'username' not in session or user_roles.get(session['username']) not in ['admin', 'security_admin']:
+    if 'username' not in session or user_roles.get(session['username']) != 'admin':
         return "Not authorized", 403
-    
-    # Filter logs for display
-    recent_logs = list(request_logs)[-100:]  # Last 100 entries
-    
-    return render_template('logs.html', logs=recent_logs, attacks=attack_logs)
-
-@app.route('/mitigation', methods=['POST'])
-def mitigation():
-    if 'username' not in session or user_roles.get(session['username']) not in ['admin', 'security_admin']:
-        return "Not authorized", 403
-    
-    action_type = request.form.get('action_type', '')
-    target = request.form.get('target', '')
-    
-    try:
-        if action_type == 'block_ip' and target:
-            blocked_ips.add(target)
-            mitigation_log = f"IP {target} blocked by {session['username']}"
-            
-        elif action_type == 'unblock_ip' and target:
-            blocked_ips.discard(target)
-            mitigation_log = f"IP {target} unblocked by {session['username']}"
-            
-        elif action_type == 'clear_alerts':
-            security_alerts.clear()
-            mitigation_log = f"Security alerts cleared by {session['username']}"
-            
-        elif action_type == 'reset_counters':
-            security_monitor.reset_counters()
-            mitigation_log = f"Security counters reset by {session['username']}"
-            
-        else:
-            return "Invalid mitigation action", 400
-            
-        request_logs.append({
-            'timestamp': time.time(),
-            'event': 'mitigation_action',
-            'username': session['username'],
-            'action': mitigation_log
-        })
-        
-        return f"Mitigation action completed: {mitigation_log}"
-        
-    except Exception as e:
-        return f"Action failed due to system error: {str(e)}", 500
-
-@app.route('/attack_simulation', methods=['POST'])
-def attack_simulation():
-    if 'username' not in session or user_roles.get(session['username']) != 'security_admin':
-        return "Not authorized", 403
-    
-    attack_type = request.form.get('attack_type', '')
-    
-    if attack_type == 'dos_simulation':
-        # Simulate DoS attack for testing
-        fake_ip = f"192.168.1.{random.randint(100, 200)}"
-        for _ in range(150):  # Exceed DoS threshold
-            security_monitor.log_request(fake_ip, '/test_endpoint', 'TestBot/1.0')
-        
-        return f"DoS attack simulation completed from {fake_ip}"
-        
-    elif attack_type == 'ddos_simulation':
-        # Simulate DDoS attack for testing
-        for i in range(1200):  # Exceed DDoS threshold
-            fake_ip = f"10.0.{random.randint(1, 10)}.{random.randint(1, 255)}"
-            security_monitor.log_request(fake_ip, '/test_endpoint', 'TestBot/1.0')
-        
-        return "DDoS attack simulation completed"
-        
-    return "Invalid simulation type", 400
-
-@app.route('/api/security_stats')
-def security_stats():
-    if 'username' not in session or user_roles.get(session['username']) not in ['admin', 'security_admin']:
-        return "Not authorized", 403
-    
-    stats = {
-        'total_requests': len(request_logs),
-        'blocked_ips_count': len(blocked_ips),
-        'attack_count': len(attack_logs),
-        'alerts_count': len(security_alerts),
-        'recent_attacks': attack_logs[-10:] if attack_logs else []
-    }
-    
-    return jsonify(stats)
-
-@app.route('/send_notification', methods=['POST'])
-def send_notification():
-    if 'username' not in session or user_roles.get(session['username']) not in ['admin', 'security_admin']:
-        return "Not authorized", 403
-    
-    recipient = request.form['recipient']
-    message = request.form['message']
-    
-    if '@' not in recipient:
-        return "Recipient address not valid.", 400
-    
-    try:
-        # In production, implement actual SMTP
-        notification_log = f"Security notification sent to {recipient}: {message}"
-        request_logs.append({
-            'timestamp': time.time(),
-            'event': 'notification_sent',
-            'username': session['username'],
-            'details': notification_log
-        })
-        return "Security notification sent!"
-        
-    except Exception as e:
-        return f"Email delivery failed: {str(e)}", 500
+    return render_template('logs.html', logs=list(request_logs)[-100:], messages=list(messages_to_admin))
 
 @app.route('/logout')
 def logout():
     if 'username' in session:
-        request_logs.append({
-            'timestamp': time.time(),
-            'event': 'logout',
-            'username': session['username'],
-            'ip': get_remote_address()
-        })
+        user_activity[session['username']].appendleft({'event': 'logout', 'time': time.strftime('%Y-%m-%d %H:%M:%S')})
     session.clear()
     return redirect(url_for('login'))
 
+# --- Profile About Me Feature ---
+@app.route('/profile', methods=['GET', 'POST'])
+def profile():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    username = session['username']
+    if request.method == 'POST':
+        about_me = request.form.get('about_me', '')
+        profiles[username] = about_me
+        flash("Profile updated.")
+        user_activity[username].appendleft({'event': 'profile_edit', 'time': time.strftime('%Y-%m-%d %H:%M:%S')})
+    return render_template('profile.html', username=username, about_me=profiles.get(username, ""))
+
+# --- Change Password Feature ---
+@app.route('/change_password', methods=['GET', 'POST'])
+def change_password():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    username = session['username']
+    if request.method == 'POST':
+        old_pw = request.form['old_password']
+        new_pw = request.form['new_password']
+        if check_password_hash(users[username], old_pw):
+            users[username] = generate_password_hash(new_pw)
+            flash("Password changed successfully.")
+            user_activity[username].appendleft({'event': 'password_changed', 'time': time.strftime('%Y-%m-%d %H:%M:%S')})
+            return redirect(url_for('dashboard'))
+        else:
+            flash("Old password incorrect.")
+    return render_template('change_password.html')
+
+# --- Contact Admin Feature ---
+@app.route('/contact_admin', methods=['GET', 'POST'])
+def contact_admin():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    username = session['username']
+    if request.method == 'POST':
+        message = request.form['message']
+        messages_to_admin.append({'user': username, 'msg': message, 'time': time.strftime('%Y-%m-%d %H:%M')})
+        flash("Message sent to admin!")
+        user_activity[username].appendleft({'event': 'contact_admin', 'time': time.strftime('%Y-%m-%d %H:%M:%S'), 'msg': message})
+        return redirect(url_for('dashboard'))
+    return render_template('contact_admin.html')
+
+# --- Activity Timeline ---
+@app.route('/activity')
+def activity():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    username = session['username']
+    entries = list(user_activity[username])
+    return render_template('activity.html', entries=entries, show_user=None)
+
+@app.route('/user_activity', methods=['GET', 'POST'])
+def user_activity_admin():
+    if 'username' not in session or user_roles.get(session['username']) != 'admin':
+        return redirect(url_for('login'))
+    entries = []
+    user_to_show = None
+
+    # Handle POST forms and GET query parameters
+    if request.method == 'POST':
+        user_to_show = request.form['username'].strip()
+    elif request.method == 'GET':
+        user_to_show = request.args.get('username', '').strip()
+
+    if user_to_show:
+        if user_to_show in user_activity and user_activity[user_to_show]:
+            entries = list(user_activity[user_to_show])
+        else:
+            flash(f"No activity found for user '{user_to_show}'.")
+    return render_template('activity.html', entries=entries, show_user=user_to_show)
+
+
 if __name__ == '__main__':
-    print("Starting Security-Enhanced Web Application...")
-    print("Default accounts:")
-    print("- User: user1/pass1")
-    print("- Admin: admin/adminpass") 
-    print("- Security Admin: security_admin/secpass123")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True)
