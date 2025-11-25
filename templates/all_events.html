@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>All Security Events</h2>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>User</th>
+      <th>Event type</th>
+      <th>Event data</th>
+      <th>Timestamp</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for event in events %}
+      <tr>
+        <td>
+          {{ event.user.username if event.user else "Unknown" }}
+        </td>
+        <td>{{ event.event_type }}</td>
+        <td>{{ event.event_data }}</td>
+        <td>{{ event.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+      </tr>
+    {% else %}
+      <tr>
+        <td colspan="4">No events recorded yet.</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

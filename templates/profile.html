@@ -1,12 +1,28 @@
-<!doctype html>
-<title>Profile</title>
-<h2>Edit Profile</h2>
-<form method="post">
-    About Me:<br>
-    <textarea name="about_me">{{ about_me }}</textarea><br>
-    <input type="submit" value="Save">
-</form>
-<a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
-{% with messages = get_flashed_messages() %}
-  {% if messages %}<ul>{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}
-{% endwith %}
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+  <h2>Your Profile</h2>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="mb-3">
+      <label for="email">Email</label>
+      <input class="form-control" type="email" id="email" name="email" value="{{ user.email }}">
+    </div>
+    <div class="mb-3">
+      <label for="role">Role</label>
+      <input class="form-control" type="text" id="role" value="{{ user.role }}" readonly>
+    </div>
+    <div class="mb-3">
+      <label for="current_password">Current Password</label>
+      <input class="form-control" type="password" name="current_password" id="current_password" required>
+      <small>Required for any changes.</small>
+    </div>
+    <div class="mb-3">
+      <label for="new_password">New Password</label>
+      <input class="form-control" type="password" name="new_password" id="new_password" placeholder="Leave blank to keep unchanged">
+    </div>
+    <button type="submit" class="btn btn-primary">Update Profile</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,22 +1,25 @@
-<!doctype html>
-<title>Dashboard</title>
-<h2>Welcome, {{ username }}!</h2>
-<p>Your role: {{ role }}</p>
-<p>About Me: {{ about_me }}</p>
-<ul>
-    <li><a href="{{ url_for('profile') }}">Edit Profile</a></li>
-    <li><a href="{{ url_for('change_password') }}">Change Password</a></li>
-    <li><a href="{{ url_for('contact_admin') }}">Contact Admin</a></li>
-    <li><a href="{{ url_for('activity') }}">View My Activity Timeline</a></li>
-    {% if role == 'admin' %}
-        <li><a href="{{ url_for('view_logs') }}">View Logs</a></li>
-        <li><a href="{{ url_for('user_activity_admin') }}">View Any User Activity</a></li>
-    {% endif %}
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="card p-4 bg-light">
+      <h3>Welcome, {{ user.username }}!</h3>
+      <p>Your email: {{ user.email }}</p>
+      <p>Your role: <span class="badge bg-info text-dark">{{ user.role }}</span></p>
+      <p>This is your secure dashboard. Use the navigation menu for more options.</p>
+    </div>
+  </div>
+  <h3>Recent Security Events</h3>
+<ul class="list-group">
+  {% for event in events %}
+    <li class="list-group-item">
+      {{ event.timestamp.strftime("%Y-%m-%d %H:%M:%S") }} -
+      {{ event.event_type }} -
+      {{ event.event_data }}
+    </li>
+  {% else %}
+    <li class="list-group-item">No security events recorded yet.</li>
+  {% endfor %}
 </ul>
-<form action="{{ url_for('request_service') }}" method="post">
-    <button type="submit">Request Service</button>
-</form>
-<a href="{{ url_for('logout') }}">Logout</a>
-{% with messages = get_flashed_messages() %}
-  {% if messages %}<ul>{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}
-{% endwith %}
+</div>
+{% endblock %}
