@@ -194,6 +194,15 @@ Please follow best practices and open an issue for major changes.
 This project is licensed under the MIT License.  
 Questions, issues, or feature requests? Contact [your-email@example.com]
 
+## Contributors
+
+- Dhanalakshmi Parthipan  
+- Penamareddy Eshwar Adharsh Reddy
+- Shreyas Adsule
+- Shreyas Adsule
+- Mohit Naidu Ganisetti
+- Derrick Dabreo
+
 ---
 
 **Last updated:** November 25, 2025
